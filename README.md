@@ -1,10 +1,10 @@
-# Movie Recap Tool (Python GUI)
+# Video Clip Tool (Python GUI)
 
-A lightweight Python GUI tool for cutting a movie file into multiple short clips using FFmpeg.  
-Useful for movie recap channels, commentary videos, or automated content workflows.
+A lightweight Python GUI tool for cutting a videos into multiple short clips using FFmpeg.  
+Useful for clipping videos or automated content workflows.
 
 ## Features
-- GUI-based movie file and destination folder selector
+- GUI-based video file and destination folder selector
 - Add/remove multiple timestamp ranges
 - Supports timestamps in **hh:mm:ss**, **mm:ss**, or **seconds** format
   - Examples:
