@@ -1,38 +1,29 @@
 import os
 import subprocess
-import tempfile
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+from gtts import gTTS
 
-# convert hh:mm:ss or mm:ss or ss string to seconds in float
 def parse_time(time_str):
     try:
         parts = list(map(float, time_str.strip().split(":")))
         if len(parts) == 3:
-            return parts[0] * 3600 + parts[1] * 60 + parts[2]
+            return parts[0]*3600 + parts[1]*60 + parts[2]
         elif len(parts) == 2:
-            return parts[0] * 60 + parts[1]
+            return parts[0]*60 + parts[1]
         elif len(parts) == 1:
             return parts[0]
-        return None
     except ValueError:
         return None
 
 class ClipRow:
     def __init__(self, parent, remove_callback):
         self.frame = tk.Frame(parent)
-
         self.start_entry = tk.Entry(self.frame, width=12)
-        self.start_entry.grid(row=0, column=0, padx=5, pady=2)
-
+        self.start_entry.grid(row=0, column=0, padx=5)
         self.end_entry = tk.Entry(self.frame, width=12)
-        self.end_entry.grid(row=0, column=1, padx=5, pady=2)
-
-        self.remove_button = tk.Button(
-            self.frame, text="-", command=self.remove, width=3
-        )
-        self.remove_button.grid(row=0, column=2, padx=5, pady=2)
-
+        self.end_entry.grid(row=0, column=1, padx=5)
+        tk.Button(self.frame, text="-", width=3, command=self.remove).grid(row=0, column=2)
         self.remove_callback = remove_callback
 
     def remove(self):
@@ -49,238 +40,179 @@ class ClipRow:
 class ClipGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Movie Clip Tool")
-
-        self.movie_file = None
-        self.output_dir = "clips"
+        self.root.title("Movie Recap Tool")
+        self.root.title("Movie Recap Tool")
+        self.movie_file_var = tk.StringVar()
+        self.output_dir_var = tk.StringVar(value="clips")
+        self.merge_dir_var = tk.StringVar(value="clips")
+        self.voice_dir_var = tk.StringVar(value="voice")
         self.clip_rows = []
-        self.merge_dir = None
 
         notebook = ttk.Notebook(root)
-        notebook.pack(fill="both", expand=True)
+        notebook.pack(expand=True, fill="both")
 
         self.clip_tab = tk.Frame(notebook)
         self.merge_tab = tk.Frame(notebook)
+        self.voice_tab = tk.Frame(notebook)
 
         notebook.add(self.clip_tab, text="Clip Cutter")
         notebook.add(self.merge_tab, text="Merge Clips")
+        notebook.add(self.voice_tab, text="Voiceover")
 
         self.build_clip_tab()
         self.build_merge_tab()
+        self.build_voice_tab()
 
-    # =========================
-    # Clip Cutter Tab
-    # =========================
+    # ---------------- CLIP CUTTER TAB ---------------- #
     def build_clip_tab(self):
-        file_frame = tk.Frame(self.clip_tab)
-        file_frame.pack(pady=10, fill="x", padx=10)
+        frame = self.clip_tab
+        frame = self.clip_tab
+        
+        # Movie File Selection
+        tk.Label(frame, text="Movie File").pack(anchor="w", padx=10)
+        file_frame = tk.Frame(frame)
+        file_frame.pack(fill="x", padx=10)
+        tk.Entry(file_frame, textvariable=self.movie_file_var, state="readonly").pack(side="left", fill="x", expand=True)
+        tk.Button(file_frame, text="Browse...", command=self.select_file).pack(side="left", padx=5)
 
-        self.file_label = tk.Label(file_frame, text="Movie File: None", anchor="w")
-        self.file_label.grid(row=0, column=0, sticky="w")
+        # Output Directory Selection
+        tk.Label(frame, text="Output Directory").pack(anchor="w", padx=10, pady=(10, 0))
+        out_frame = tk.Frame(frame)
+        out_frame.pack(fill="x", padx=10)
+        tk.Entry(out_frame, textvariable=self.output_dir_var, state="readonly").pack(side="left", fill="x", expand=True)
+        tk.Button(out_frame, text="Select Folder...", command=self.select_output_dir).pack(side="left", padx=5)
 
-        tk.Button(file_frame, text="Browse...", command=self.select_file)\
-            .grid(row=0, column=1, padx=5)
-
-        dest_frame = tk.Frame(self.clip_tab)
-        dest_frame.pack(pady=5, fill="x", padx=10)
-
-        self.dest_label = tk.Label(
-            dest_frame, text=f"Destination: {self.output_dir}", anchor="w"
-        )
-        self.dest_label.grid(row=0, column=0, sticky="w")
-
-        tk.Button(dest_frame, text="Browse...", command=self.select_destination)\
-            .grid(row=0, column=1, padx=5)
-
-        rows_frame = tk.Frame(self.clip_tab)
-        rows_frame.pack(pady=5, padx=10)
-
-        tk.Label(
-            rows_frame,
-            text="Clip Ranges (Start → End)",
-            font=("Arial", 10, "bold")
-        ).pack()
-
-        tk.Label(
-            rows_frame,
-            text="Enter time as hh:mm:ss, mm:ss, or seconds (e.g. 1:30 or 90)",
-            font=("Arial", 8),
-            fg="gray"
-        ).pack(pady=(0, 5))
-
-        self.clip_rows_container = tk.Frame(rows_frame)
-        self.clip_rows_container.pack()
-
-        tk.Button(
-            self.clip_tab,
-            text="+ Add Timestamp Range",
-            command=self.add_row
-        ).pack(pady=5)
-
-        tk.Button(
-            self.clip_tab,
-            text="Export Clips",
-            command=self.export_clips
-        ).pack(pady=10)
-
+        tk.Label(frame, text="Clip Ranges (hh:mm:ss or mm:ss)", font=("Arial", 10, "bold")).pack(pady=10)
+        self.rows_container = tk.Frame(frame)
+        self.rows_container.pack()
+        tk.Button(frame, text="+ Add Range", command=self.add_row).pack(pady=5)
+        tk.Button(frame, text="Export Clips", command=self.export_clips).pack(pady=5)
         self.add_row()
 
-    # =========================
-    # Merge Clips Tab
-    # =========================
-    def build_merge_tab(self):
-        frame = tk.Frame(self.merge_tab)
-        frame.pack(pady=20, padx=20, fill="x")
-
-        self.merge_label = tk.Label(
-            frame, text="Clips Folder: None", anchor="w"
-        )
-        self.merge_label.grid(row=0, column=0, sticky="w")
-
-        tk.Button(
-            frame,
-            text="Browse...",
-            command=self.select_merge_dir
-        ).grid(row=0, column=1, padx=5)
-
-        tk.Label(
-            self.merge_tab,
-            text="Merges clip_*.mp4 into clips_merged.mp4 (no re-encoding)",
-            font=("Arial", 8),
-            fg="gray"
-        ).pack(pady=(5, 10))
-
-        tk.Button(
-            self.merge_tab,
-            text="Merge Clips",
-            command=self.merge_clips,
-            width=20
-        ).pack()
-
-    # Clip Cutter Logic
     def select_file(self):
-        file = filedialog.askopenfilename(
-            filetypes=[("Video Files", "*.mp4 *.mov *.mkv *.avi")]
-        )
+        file = filedialog.askopenfilename(filetypes=[("Video Files", "*.mp4 *.mov *.mkv")])
         if file:
-            self.movie_file = file
-            self.file_label.config(
-                text=f"Movie File: {os.path.basename(file)}"
-            )
+            self.movie_file_var.set(file)
 
-    def select_destination(self):
-        folder = filedialog.askdirectory()
-        if folder:
-            self.output_dir = folder
-            self.dest_label.config(text=f"Destination: {folder}")
+    def select_output_dir(self):
+        directory = filedialog.askdirectory()
+        if directory:
+            self.output_dir_var.set(directory)
 
     def add_row(self):
-        row = ClipRow(self.clip_rows_container, self.remove_row)
+        row = ClipRow(self.rows_container, self.clip_rows.remove)
         row.frame.pack()
         self.clip_rows.append(row)
 
-    def remove_row(self, row):
-        self.clip_rows.remove(row)
-
     def export_clips(self):
-        if not self.movie_file:
-            messagebox.showerror("Error", "Please select a movie file first.")
+        movie_file = self.movie_file_var.get()
+        if not movie_file:
+            messagebox.showerror("Error", "Select a movie first.")
             return
-
-        os.makedirs(self.output_dir, exist_ok=True)
-
-        for idx, row in enumerate(self.clip_rows, start=1):
+        
+        output_dir = self.output_dir_var.get()
+        if not output_dir:
+            output_dir = os.path.join(os.getcwd(), "clips")
+            
+        os.makedirs(output_dir, exist_ok=True)
+        for i, row in enumerate(self.clip_rows, start=1):
             values = row.get_values()
             if not values:
-                messagebox.showerror("Error", f"Invalid time for clip {idx}.")
+                messagebox.showerror("Error", f"Invalid time in clip {i}")
                 return
-
             start, end = values
-            if end <= start:
-                messagebox.showerror(
-                    "Error",
-                    f"End time must be greater than start time for clip {idx}."
-                )
-                return
+            out = os.path.join(output_dir, f"clip_{i}.mp4")
+            subprocess.run([
+                "ffmpeg", "-ss", str(start), "-i", movie_file,
+                "-t", str(end-start), "-c", "copy", out
+            ])
+        messagebox.showinfo("Done", "Clips exported successfully.")
 
-            out_path = os.path.join(self.output_dir, f"clip_{idx}.mp4")
+    # ---------------- MERGE TAB ---------------- #
+    def build_merge_tab(self):
+        frame = self.merge_tab
+        
+        tk.Label(frame, text="Clips Directory").pack(anchor="w", padx=10, pady=(10, 0))
+        merge_frame = tk.Frame(frame)
+        merge_frame.pack(fill="x", padx=10)
+        tk.Entry(merge_frame, textvariable=self.merge_dir_var, state="readonly").pack(side="left", fill="x", expand=True)
+        tk.Button(merge_frame, text="Select Folder...", command=self.select_merge_dir).pack(side="left", padx=5)
 
-            cmd = [
-                "ffmpeg",
-                "-ss", str(start),
-                "-i", self.movie_file,
-                "-t", str(end - start),
-                "-c", "copy",
-                out_path
-            ]
+        tk.Button(frame, text="Merge Clips", command=self.merge_clips).pack(pady=20)
 
-            subprocess.run(cmd, check=True)
-
-        messagebox.showinfo(
-            "Done",
-            f"All clips exported successfully to:\n{self.output_dir}"
-        )
-
-    # Merge Logic
     def select_merge_dir(self):
-        folder = filedialog.askdirectory()
-        if folder:
-            self.merge_dir = folder
-            self.merge_label.config(text=f"Clips Folder: {folder}")
+        directory = filedialog.askdirectory()
+        if directory:
+            self.merge_dir_var.set(directory)
 
     def merge_clips(self):
-        if not self.merge_dir:
-            messagebox.showerror("Error", "Please select a clips folder.")
-            return
+        merge_dir = self.merge_dir_var.get()
+        if not merge_dir:
+             merge_dir = os.path.join(os.getcwd(), "clips")
 
-        clips = sorted(
-            f for f in os.listdir(self.merge_dir)
-            if f.lower().endswith(".mp4") and f.startswith("clip_")
-        )
+        if not os.path.exists(merge_dir):
+             messagebox.showerror("Error", f"Directory not found: {merge_dir}")
+             return
 
+        clips = sorted(f for f in os.listdir(merge_dir) if f.startswith("clip_"))
         if not clips:
-            messagebox.showerror(
-                "Error",
-                "No clip_*.mp4 files found in the selected folder."
-            )
+            messagebox.showerror("Error", "No clips found.")
             return
-
-        # Temporary concat list (no clutter)
-        with tempfile.NamedTemporaryFile(
-            mode="w", delete=False, suffix=".txt"
-        ) as f:
-            list_file = f.name
+        output = os.path.join(merge_dir, "clips_merged.mp4")
+        # Generate temporary list file
+        list_file_path = os.path.join(merge_dir, "clips_list.txt")
+        with open(list_file_path, "w") as f:
             for clip in clips:
-                f.write(
-                    f"file '{os.path.join(self.merge_dir, clip)}'\n"
-                )
+                # Use absolute path to avoid relative path issues with ffmpeg concat
+                abs_path = os.path.abspath(os.path.join(merge_dir, clip))
+                f.write(f"file '{abs_path}'\n")
+        subprocess.run([
+            "ffmpeg", "-f", "concat", "-safe", "0",
+            "-i", list_file_path, "-c", "copy", output
+        ])
+        os.remove(list_file_path)
+        messagebox.showinfo("Done", f"Clips merged to {output}")
 
-        output_path = os.path.join(
-            self.merge_dir, "clips_merged.mp4"
-        )
+    # ---------------- VOICEOVER TAB ---------------- #
+    def build_voice_tab(self):
+        frame = self.voice_tab
+        
+        tk.Label(frame, text="Output Directory").pack(anchor="w", padx=10, pady=(10, 0))
+        voice_frame = tk.Frame(frame)
+        voice_frame.pack(fill="x", padx=10)
+        tk.Entry(voice_frame, textvariable=self.voice_dir_var, state="readonly").pack(side="left", fill="x", expand=True)
+        tk.Button(voice_frame, text="Select Folder...", command=self.select_voice_dir).pack(side="left", padx=5)
 
-        cmd = [
-            "ffmpeg",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", list_file,
-            "-c", "copy",
-            output_path
-        ]
+        tk.Label(frame, text="Narration Script", font=("Arial", 11, "bold")).pack(anchor="w", padx=10, pady=5)
+        self.script_box = tk.Text(frame, height=15, wrap="word")
+        self.script_box.pack(fill="both", expand=True, padx=10)
+        tk.Button(frame, text="Generate Voiceover (Male)", command=self.generate_voiceover).pack(pady=10)
 
-        try:
-            subprocess.run(cmd, check=True)
-            messagebox.showinfo(
-                "Done",
-                f"Clips merged successfully:\n{output_path}"
-            )
-        except subprocess.CalledProcessError as e:
-            messagebox.showerror("FFmpeg Error", str(e))
-        finally:
-            os.remove(list_file)
+    def select_voice_dir(self):
+        directory = filedialog.askdirectory()
+        if directory:
+            self.voice_dir_var.set(directory)
 
+    def generate_voiceover(self):
+        script = self.script_box.get("1.0", "end").strip()
+        if not script:
+            messagebox.showerror("Error", "Script is empty.")
+            return
+            
+        voice_dir = self.voice_dir_var.get()
+        if not voice_dir:
+            voice_dir = os.path.join(os.getcwd(), "voice")
+            
+        os.makedirs(voice_dir, exist_ok=True)
+        paragraphs = [p.strip() for p in script.split("\n\n") if p.strip()]
+        for i, text in enumerate(paragraphs, start=1):
+            tts = gTTS(text=text, lang="en", tld="co.uk")  # tld=co.uk gives slightly deeper/male sounding voice
+            tts.save(os.path.join(voice_dir, f"narration_{i}.mp3"))
+        messagebox.showinfo("Done", f"Generated {len(paragraphs)} narration clips in {voice_dir}")
+
+# ---------------- RUN ---------------- #
 if __name__ == "__main__":
     root = tk.Tk()
-    root.geometry("520x420")
+    root.geometry("600x450")
     ClipGUI(root)
     root.mainloop()
