@@ -40,8 +40,8 @@ class ClipRow:
 class ClipGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Movie Recap Tool")
-        self.root.title("Movie Recap Tool")
+        self.root.title("Video Clip Tool")
+        self.root.title("Video Clip Tool")
         self.movie_file_var = tk.StringVar()
         self.output_dir_var = tk.StringVar(value="clips")
         self.merge_dir_var = tk.StringVar(value="clips")
@@ -69,7 +69,7 @@ class ClipGUI:
         frame = self.clip_tab
         
         # Movie File Selection
-        tk.Label(frame, text="Movie File").pack(anchor="w", padx=10)
+        tk.Label(frame, text="Video File").pack(anchor="w", padx=10)
         file_frame = tk.Frame(frame)
         file_frame.pack(fill="x", padx=10)
         tk.Entry(file_frame, textvariable=self.movie_file_var, state="readonly").pack(side="left", fill="x", expand=True)
